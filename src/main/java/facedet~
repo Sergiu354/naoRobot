@@ -1,0 +1,91 @@
+package work;
+
+import java.io.File;
+import java.io.IOException;
+import java.util.Map;
+import java.util.TreeMap;
+
+import org.json.simple.parser.ParseException;
+import org.openimaj.feature.FloatFV;
+import org.openimaj.feature.FloatFVComparison;
+import org.openimaj.image.FImage;
+import org.openimaj.image.ImageUtilities;
+import org.openimaj.image.processing.face.detection.DetectedFace;
+import org.openimaj.image.processing.face.detection.HaarCascadeDetector;
+import org.openimaj.image.processing.face.detection.keypoints.FKEFaceDetector;
+import org.openimaj.image.processing.face.detection.keypoints.KEDetectedFace;
+import org.openimaj.image.processing.face.feature.FacePatchFeature;
+import org.openimaj.image.processing.face.feature.comparison.FaceFVComparator;
+import org.openimaj.image.processing.face.similarity.FaceSimilarityEngine;
+
+
+class DetectionFace{
+    FImage image1;
+    FImage[] image2 = new FImage[30];
+    Map seeFace = new TreeMap<Double,String>();
+    HaarCascadeDetector detector;
+    FKEFaceDetector kedetector;
+    FacePatchFeature.Extractor extractor;
+    FaceFVComparator<FacePatchFeature, FloatFV> comparator;
+    FaceSimilarityEngine<KEDetectedFace, FacePatchFeature, FImage> engine;
+    File myFile;
+    File[] files;
+    int fileListSize;
+    JsonParse faceJSON = new JsonParse();
+
+    DetectionFace() throws IOException {
+        myFile = new File("/home/sergiu/NAO/faces/");
+        files = myFile.listFiles();
+        fileListSize=files.length;
+        for (int i = 0; i <fileListSize; i++) {
+            System.err.println(files[i]);
+            image2[i]= ImageUtilities.readF(files[i]);
+        }
+
+        detector = HaarCascadeDetector.BuiltInCascade.frontalface_alt_tree.load();
+        kedetector = new FKEFaceDetector(detector);
+
+        extractor = new FacePatchFeature.Extractor();
+
+        comparator = new FaceFVComparator<FacePatchFeature, FloatFV>(FloatFVComparison.SUM_SQUARE);  //CITY_BLOCK ,COSINE_DIST , EUCLIDEAN , SUM_SQUARE
+    }
+
+    void detection(FImage imag) throws IOException, ParseException {
+        image1 = imag;
+        for (int i = 0; i < fileListSize; i++) {
+            engine = new FaceSimilarityEngine<KEDetectedFace, FacePatchFeature, FImage>(kedetector, extractor, comparator);
+            engine.setQuery(image1, "image1");
+            engine.setTest(image2[i], "image2");
+            engine.performTest();
+                for (final Map.Entry<String, Map<String, Double>> e : engine.getSimilarityDictionary().entrySet()) {
+                    double bestScore = Double.MAX_VALUE;
+                    for (final Map.Entry<String, Double> matches : e.getValue().entrySet()) {
+                        if (matches.getValue() < bestScore) {
+                            bestScore = matches.getValue();
+                            if(bestScore<2500) {   // SUM_SQUARE control
+                                System.err.println(bestScore + "   " + files[i].getName());
+                                seeFace.put(bestScore, files[i].getName());
+                            }
+                        }
+                    }
+                }
+        }
+        if (!seeFace.isEmpty()) {
+            if (faceJSON.getFacesReadJSON(seeFace.get(seeFace.keySet().iterator().next()).toString())) {
+                System.err.println("\tFace see: " + seeFace.get(seeFace.keySet().iterator().next()));
+                faceJSON.getFacesReadJSON(seeFace.get(seeFace.keySet().iterator().next()).toString());
+            }
+        }
+        seeFace.clear();
+    }
+}
+
+public class FaceDetection extends DetectedFace {
+
+    public static void main(String[] args) throws IOException, ParseException {
+        DetectionFace df = new DetectionFace();
+        df.detection(ImageUtilities.readF(new File("/home/sergiu/NAO/faces/Sergiu11.jpg")));
+        System.err.println("start");
+    }
+}
+
