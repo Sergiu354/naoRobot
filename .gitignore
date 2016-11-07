@@ -2,4 +2,4 @@ target/*
 .idea
 src/test/*
 src/main/java/test/*
-src/main/java/prezentation/*
+src/main/java/presentation/*
